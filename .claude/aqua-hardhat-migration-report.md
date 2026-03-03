@@ -58,11 +58,7 @@ These features work equivalently in Hardhat 3:
 - FFI — not enabled
 - Deployment scripts (`forge script` / `.s.sol`) — project has `script/DeployAquaRouter.s.sol` but deployment scripts are Foundry-specific and not covered by Hardhat's Solidity test runner
 
-## 3. Hardhat / EDR Bug Reports
-
-No bugs found. All tests pass without behavioral differences.
-
-## 4. Workarounds Applied
+## 3. Workarounds Applied
 
 1. **`patch-package` for `@1inch/solidity-utils`** — The package's `exports` field in `package.json` only exposes JS/TS entry points, not `.sol` contract files. Hardhat 3 respects Node.js `exports` resolution, causing `HHE902` errors. Patch adds `./contracts/*.sol`, `./contracts/libraries/*.sol`, `./contracts/mixins/*.sol`, and `./contracts/interfaces/*.sol` to the exports. Patch file: `patches/@1inch+solidity-utils+6.9.2.patch`.
 
@@ -78,7 +74,7 @@ No bugs found. All tests pass without behavioral differences.
 
 3. **ESM mode** — Added `"type": "module"` to `package.json` (required by Hardhat 3). No existing CommonJS files were broken.
 
-## 5. Next Steps
+## 4. Next Steps
 
 1. **File upstream issue for `@1inch/solidity-utils` exports** — Request the package maintainers add `.sol` file exports to their `package.json` `exports` field, eliminating the need for `patch-package`. Impact: removes a build-time workaround.
 
