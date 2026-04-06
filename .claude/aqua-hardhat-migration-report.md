@@ -1,7 +1,7 @@
 # Aqua — Hardhat 3 Migration Report
 
-**Hardhat version installed:** `^3.1.10`
-**Migration date:** 2026-03-03
+**Hardhat version installed:** `^3.3.0`
+**Migration date:** 2026-04-06
 **Foundry analysis:** [Foundry analysis](aqua-foundry-migration-analysis.md)
 
 ---
@@ -11,10 +11,6 @@
 ### Blockers
 
 None — all 49 tests pass.
-
-### Notable gaps (non-blocking, medium+ impact)
-
-- 🚩 No equivalent for `forge snapshot` — gas snapshot workflow unavailable ([#7769](https://github.com/NomicFoundation/hardhat/issues/7769))
 
 ---
 
@@ -34,9 +30,9 @@ The `examples/test/` directory contains 26 additional test functions, but these 
 
 | Feature | Parity | Impact | Workaround / Notes |
 |---|---|---|---|
-| Gas snapshots (`forge snapshot`) | 🚩 **Gap** | **Medium** — `snapshot` script in package.json has no Hardhat equivalent | [#7769](https://github.com/NomicFoundation/hardhat/issues/7769) — no workaround currently |
-| `[profile.solx]` (custom compiler binary) | 🚩 **Gap** | **Low** — alternative compiler not available in Hardhat | Foundry-only feature; Hardhat uses solc from npm |
-| `[fmt]` (Forge formatter) | 🚩 **Gap** | **Low** — project can use prettier/solhint instead | Foundry-only feature; most projects use prettier for Solidity formatting |
+| Deployment scripting | 🚩 **Gap** | **Low** — `script/DeployAquaRouter.s.sol` exists but is not part of the test suite | Foundry-specific (`forge script` / `vm.startBroadcast()`); Hardhat Ignition is the HH3 alternative but requires a rewrite |
+| `[profile.solx]` | 🚩 **Gap** | **Low** — alternative compiler not available in Hardhat | Foundry-only feature; Hardhat uses solc from npm |
+| Built-in formatter | 🟡 **Partial** | **Low** — `forge fmt` works standalone regardless of build tool; `prettier-plugin-solidity` is a mature alternative | `[fmt]` config is Foundry-only but formatting workflow is not blocked |
 | `@1inch/solidity-utils` exports | 🟡 **Partial** | **Low** — requires patch-package to expose `.sol` files | Patch applied; upstream package needs to add `.sol` exports to `exports` field |
 
 ### Full parity
@@ -46,38 +42,32 @@ These features work equivalently in Hardhat 3:
 - Solidity compilation (`forge build` → `npx hardhat compile`)
 - Solidity compiler settings (solc 0.8.30, optimizer with 10M runs, viaIR)
 - forge-std cheatcodes (`vm.*`) — all used cheatcodes work correctly
-- Fuzz testing (`testFuzz_*` — 256 runs)
+- Fuzz testing (`testFuzz_*` — 256 runs default)
+- Gas snapshots (`forge snapshot` → Hardhat 3.3.0 built-in support)
 - `fsPermissions` (read-write access to `./deployments` and `./config`)
 - Remappings (`remappings.txt` loaded automatically)
 - npm dependency resolution (forge-std, @openzeppelin/contracts, @1inch/solidity-utils)
 
 **Features not used by this project:**
+
 - Network configuration / forking — no `[rpc_endpoints]` in foundry.toml
-- Contract verification — no `[etherscan]` section
+- Etherscan verification — no `[etherscan]` section
 - Invariant testing — no invariant tests in codebase
 - FFI — not enabled
-- Deployment scripts (`forge script` / `.s.sol`) — project has `script/DeployAquaRouter.s.sol` but deployment scripts are Foundry-specific and not covered by Hardhat's Solidity test runner
+- Inline test config — no `forge-config:` comments in test files
 
 ## 3. Workarounds Applied
 
-1. **`patch-package` for `@1inch/solidity-utils`** — The package's `exports` field in `package.json` only exposes JS/TS entry points, not `.sol` contract files. Hardhat 3 respects Node.js `exports` resolution, causing `HHE902` errors. Patch adds `./contracts/*.sol`, `./contracts/libraries/*.sol`, `./contracts/mixins/*.sol`, and `./contracts/interfaces/*.sol` to the exports. Patch file: `patches/@1inch+solidity-utils+6.9.2.patch`.
+1. **`patch-package` for `@1inch/solidity-utils`** — The package's `exports` field in `package.json` only exposes JS/TS entry points, not `.sol` contract files. Hardhat 3 respects Node.js `exports` resolution, causing `HHE902` errors. In Forge, the remapping `@1inch/solidity-utils/=node_modules/@1inch/solidity-utils/` bypasses `exports` entirely since Forge uses its own resolution (not Node.js module resolution). Patch adds `./contracts/*.sol`, `./contracts/libraries/*.sol`, `./contracts/mixins/*.sol`, and `./contracts/interfaces/*.sol` to the exports. Patch file: `patches/@1inch+solidity-utils+6.9.2.patch`.
 
-2. **Absolute import rewrites** — 15 absolute imports across 8 files converted to relative paths:
-   - `test/AquaEvents.t.sol` — `src/interfaces/IAqua.sol` → `../src/interfaces/IAqua.sol`
-   - `test/AquaBalances.t.sol` — same
-   - `test/AquaPushPull.t.sol` — same
-   - `test/AquaLifecycle.t.sol` — same
-   - `test/AquaShipDock.t.sol` — same
-   - `test/base/AquaTestBase.sol` — `src/Aqua.sol` and `src/interfaces/IAqua.sol` → `../../src/...`
-   - `examples/test/XYCNestedSwaps.t.sol` — `test/utils/Dynamic.sol`, `src/Aqua.sol`, `src/AquaApp.sol`, `examples/apps/XYCSwap.sol` → relative paths
-   - `examples/test/XYCSwap.t.sol` — same
+2. **Absolute import rewrites** — 15 absolute imports across 8 files converted to relative paths. Forge resolves `src/` and `test/` as absolute prefixes via `libs` config; Hardhat 3 requires relative or npm-style imports. Files modified: `test/AquaEvents.t.sol`, `test/AquaBalances.t.sol`, `test/AquaPushPull.t.sol`, `test/AquaLifecycle.t.sol`, `test/AquaShipDock.t.sol`, `test/base/AquaTestBase.sol`, `examples/test/XYCNestedSwaps.t.sol`, `examples/test/XYCSwap.t.sol`.
 
-3. **ESM mode** — Added `"type": "module"` to `package.json` (required by Hardhat 3). No existing CommonJS files were broken.
+3. **ESM mode** — `"type": "module"` set in `package.json` (required by Hardhat 3). No existing CommonJS files were broken.
 
 ## 4. Next Steps
 
 1. **File upstream issue for `@1inch/solidity-utils` exports** — Request the package maintainers add `.sol` file exports to their `package.json` `exports` field, eliminating the need for `patch-package`. Impact: removes a build-time workaround.
 
-2. **Monitor gas snapshot support** — Track [#7769](https://github.com/NomicFoundation/hardhat/issues/7769) for `forge snapshot` equivalent. Impact: the `snapshot` script in package.json currently has no Hardhat alternative.
+2. **Add Hardhat gas snapshot script** — Gas snapshots are now supported in Hardhat 3.3.0. Add a `"snapshot-hardhat"` script to `package.json` alongside the existing `"snapshot": "forge snapshot ..."`.
 
 3. **Consider running `examples/test/` tests** — The 26 test functions in `examples/test/` are not included in the default test run. If desired, configure a separate test path or move them into `test/`.
